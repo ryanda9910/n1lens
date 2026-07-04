@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>n1lens — spot N+1 queries in a query log</title>
+<meta name="description" content="Paste your ORM / SQL query log. n1lens finds the N+1 patterns — one parent query, then the same child query fired once per row — and shows the batched fix. No build, no account, all in your browser." />
+<style>
+  :root { --bg:#0d0f12; --panel:#151821; --line:#232838; --text:#e7ecf3; --muted:#8b95a7; --accent:#34d399; --bad:#f87171; --warn:#fbbf24; --code:#0a0c10; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font:15px/1.5 -apple-system,"Segoe UI",system-ui,sans-serif; background:var(--bg); color:var(--text); }
+  .wrap { max-width:900px; margin:0 auto; padding:40px 22px 80px; }
+  h1 { font-size:30px; letter-spacing:-.02em; } h1 b { color:var(--accent); }
+  header p { color:var(--muted); margin-top:8px; max-width:640px; }
+  label { display:block; font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin:24px 0 8px; }
+  textarea { width:100%; min-height:180px; background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:12px; padding:14px; font-family:ui-monospace,Menlo,monospace; font-size:13px; line-height:1.55; resize:vertical; }
+  textarea:focus { outline:none; border-color:var(--accent); }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:12px; }
+  .chips { display:flex; flex-wrap:wrap; gap:7px; }
+  .chip { font:inherit; font-size:12px; font-family:ui-monospace,Menlo,monospace; border:1px solid var(--line); background:var(--panel); color:var(--muted); padding:5px 9px; border-radius:999px; cursor:pointer; }
+  .chip:hover { color:var(--text); border-color:var(--accent); }
+  .thr { margin-left:auto; font-size:13px; color:var(--muted); display:flex; align-items:center; gap:8px; }
+  .thr input { width:56px; background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:5px 8px; font-family:ui-monospace,monospace; }
+  .summary { display:flex; gap:10px; margin-top:22px; flex-wrap:wrap; }
+  .stat { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px 16px; min-width:96px; }
+  .stat .n { font-size:24px; font-weight:700; } .stat .l { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
+  .stat.ok .n { color:var(--accent); } .stat.bad .n { color:var(--bad); }
+  .verdict { margin-top:20px; padding:14px 16px; border-radius:12px; font-size:15px; border:1px solid; }
+  .verdict.clean { border-color:var(--accent); background:rgba(52,211,153,.08); color:var(--accent); }
+  .verdict.hit { border-color:var(--bad); background:rgba(248,113,113,.08); color:var(--bad); }
+  .find { background:var(--code); border:1px solid var(--line); border-left:3px solid var(--bad); border-radius:12px; padding:16px; margin-top:14px; }
+  .find.high { border-left-color:var(--bad); } .find.medium { border-left-color:var(--warn); } .find.low { border-left-color:var(--muted); }
+  .find .head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .badge { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; padding:3px 8px; border-radius:6px; }
+  .badge.high { background:var(--bad); color:#1a0808; } .badge.medium { background:var(--warn); color:#1a1408; } .badge.low { background:var(--muted); color:#0a0c10; }
+  .find .count { font-family:ui-monospace,monospace; font-size:15px; color:var(--text); } .find .count b { color:var(--bad); }
+  .find code, .find pre { font-family:ui-monospace,Menlo,monospace; font-size:12.5px; }
+  .find .q { display:block; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:9px 11px; margin-top:10px; color:var(--muted); overflow-x:auto; white-space:pre; }
+  .find .why { color:var(--muted); margin-top:12px; font-size:13.5px; }
+  .find .fix { margin-top:12px; }
+  .find .fix .k { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--accent); }
+  .find .fix pre { background:rgba(52,211,153,.06); border:1px solid rgba(52,211,153,.25); border-radius:8px; padding:10px 11px; margin-top:6px; color:var(--accent); overflow-x:auto; white-space:pre; }
+  .find .fix .orm { color:var(--muted); font-size:12.5px; margin-top:8px; }
+  footer { margin-top:40px; color:var(--muted); font-size:13px; border-top:1px solid var(--line); padding-top:18px; }
+  footer a { color:var(--accent); text-decoration:none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>n1<b>lens</b></h1>
+    <p>Paste a query log from your ORM or database. n1lens spots the <b style="color:var(--bad)">N+1</b> patterns — one query for the list, then the same query fired once per row — and shows the batched fix. Everything runs in your browser; nothing is uploaded.</p>
+  </header>
+
+  <label for="log">query log</label>
+  <textarea id="log" spellcheck="false" placeholder="SELECT * FROM posts&#10;SELECT * FROM users WHERE id = 1&#10;SELECT * FROM users WHERE id = 2&#10;SELECT * FROM users WHERE id = 3&#10;..."></textarea>
+
+  <div class="row">
+    <div class="chips">
+      <button class="chip" data-ex="rails">Rails N+1</button>
+      <button class="chip" data-ex="clean">already batched</button>
+      <button class="chip" data-ex="two">two relations</button>
+      <button class="chip" data-ex="clear">clear</button>
+    </div>
+    <div class="thr">repeats to flag <input id="thr" type="number" min="2" value="3" /></div>
+  </div>
+
+  <div id="out"></div>
+
+  <footer>
+    n1lens · MIT · runs entirely in your browser ·
+    <a href="https://github.com/ryanda9910/n1lens" target="_blank" rel="noreferrer">source on GitHub</a>
+  </footer>
+</div>
+
+<script src="n1.js"></script>
+<script>
+  const EX = {
+    rails: `Started GET "/posts"
+  Post Load (0.4ms)  SELECT "posts".* FROM "posts" LIMIT 20
+  User Load (0.2ms)  SELECT "users".* FROM "users" WHERE "users"."id" = 1
+  User Load (0.2ms)  SELECT "users".* FROM "users" WHERE "users"."id" = 2
+  User Load (0.2ms)  SELECT "users".* FROM "users" WHERE "users"."id" = 3
+  User Load (0.2ms)  SELECT "users".* FROM "users" WHERE "users"."id" = 4
+  User Load (0.2ms)  SELECT "users".* FROM "users" WHERE "users"."id" = 5
+  User Load (0.2ms)  SELECT "users".* FROM "users" WHERE "users"."id" = 6
+  User Load (0.2ms)  SELECT "users".* FROM "users" WHERE "users"."id" = 7
+  User Load (0.2ms)  SELECT "users".* FROM "users" WHERE "users"."id" = 8`,
+    clean: `SELECT "posts".* FROM "posts" LIMIT 20
+SELECT "users".* FROM "users" WHERE "users"."id" IN (1,2,3,4,5,6,7,8)`,
+    two: `SELECT * FROM orders LIMIT 10
+SELECT * FROM line_items WHERE order_id = 1
+SELECT * FROM shipments WHERE order_id = 1
+SELECT * FROM line_items WHERE order_id = 2
+SELECT * FROM shipments WHERE order_id = 2
+SELECT * FROM line_items WHERE order_id = 3
+SELECT * FROM shipments WHERE order_id = 3
+SELECT * FROM line_items WHERE order_id = 4
+SELECT * FROM shipments WHERE order_id = 4`,
+  };
+
+  const log = document.getElementById("log");
+  const thr = document.getElementById("thr");
+  const out = document.getElementById("out");
+  const esc = (s) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+
+  function render() {
+    const text = log.value;
+    if (!text.trim()) { out.innerHTML = ""; return; }
+    const r = n1.analyze(text, { threshold: Math.max(2, parseInt(thr.value) || 3) });
+    const hits = r.findings.length;
+
+    let html = `<div class="summary">
+      <div class="stat"><div class="n">${r.total}</div><div class="l">queries</div></div>
+      <div class="stat ${hits ? "bad" : "ok"}"><div class="n">${hits}</div><div class="l">N+1 found</div></div>
+      <div class="stat ${hits ? "bad" : "ok"}"><div class="n">${r.flagged}</div><div class="l">wasted queries</div></div>
+    </div>`;
+
+    if (!hits) {
+      html += `<div class="verdict clean">No N+1 pattern found. Every query shape appears fewer than ${Math.max(2, parseInt(thr.value) || 3)} times, or the repeats are already batched with IN (...).</div>`;
+      out.innerHTML = html;
+      return;
+    }
+
+    html += `<div class="verdict hit">Found ${hits} N+1 pattern${hits > 1 ? "s" : ""}. ${r.flagged} queries could collapse into ${hits} batched one${hits > 1 ? "s" : ""}.</div>`;
+
+    for (const f of r.findings) {
+      html += `<div class="find ${f.severity}">
+        <div class="head">
+          <span class="badge ${f.severity}">${f.severity}</span>
+          <span class="count"><b>${f.count}×</b> the same lookup on <b>${esc(f.table || "?")}</b> (from line ${f.firstLine})</span>
+        </div>
+        <code class="q">${esc(f.example)}</code>
+        <div class="why">${esc(f.fix.problem)}</div>
+        <div class="fix">
+          <div class="k">batch it into one query</div>
+          <pre>${esc(f.fix.batched)}</pre>
+          <div class="orm">${esc(f.fix.orm)}</div>
+        </div>
+      </div>`;
+    }
+    out.innerHTML = html;
+  }
+
+  document.querySelectorAll(".chip").forEach((b) => b.addEventListener("click", () => {
+    const k = b.dataset.ex;
+    if (k === "clear") { log.value = ""; } else { log.value = EX[k] || ""; }
+    render();
+  }));
+  log.addEventListener("input", render);
+  thr.addEventListener("input", render);
+  log.value = EX.rails;
+  render();
+</script>
+</body>
+</html>

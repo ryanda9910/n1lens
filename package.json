@@ -1,0 +1,16 @@
+{
+  "name": "n1lens",
+  "version": "0.1.0",
+  "description": "Paste a query log, see the N+1 patterns, get the batched fix. Zero-dependency browser tool + Node detection engine.",
+  "license": "MIT",
+  "type": "commonjs",
+  "main": "n1.js",
+  "files": ["n1.js", "index.html", "README.md"],
+  "scripts": {
+    "test": "node test/n1.test.mjs"
+  },
+  "keywords": ["n+1", "orm", "sql", "performance", "query", "activerecord", "prisma", "sqlalchemy", "django"],
+  "repository": { "type": "git", "url": "git+https://github.com/ryanda9910/n1lens.git" },
+  "homepage": "https://ryanda9910.github.io/n1lens/",
+  "bugs": { "url": "https://github.com/ryanda9910/n1lens/issues" }
+}
