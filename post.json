@@ -3,5 +3,5 @@
   "card": "https://raw.githubusercontent.com/ryanda9910/n1lens/main/assets/social-card.png",
   "alt": "n1lens web tool showing a query log with two N+1 patterns found, line_items and shipments loaded once per row, plus the batched SELECT ... WHERE id IN (?) fix.",
   "threads": "Bug performa paling umum di kode ORM: query N+1. Kode ambil satu list, lalu loop tiap baris dan load relasinya sekali per baris. 1 query jadi N+1. Lancar saat 5 baris, ambruk saat 500.\n\nn1lens: tempel log query, dia tunjukkan query mana yang jalan sekali per baris, berapa round trip terbuang, dan satu query batch (IN) yang menggantikannya. Jalan penuh di browser, tanpa build, tanpa upload.\n\nGratis, MIT: https://github.com/ryanda9910/n1lens\nTool: https://ryanda9910.github.io/n1lens/",
-  "bluesky": "N+1 is the most common ORM perf bug and the easiest to miss: load a list, then touch a relation once per row. 1 query becomes N+1.\n\nn1lens reads a query log, flags the per-row lookups, and shows the batched IN(...) fix. Runs in the browser, nothing uploaded.\n\nLive: https://ryanda9910.github.io/n1lens/"
+  "bluesky": "N+1 is the most common ORM perf bug: load a list, then touch a relation once per row. 1 query becomes N+1.\n\nn1lens reads a query log, flags the per-row lookups, shows the batched IN(...) fix. Runs in the browser.\n\nLive: https://ryanda9910.github.io/n1lens/"
 }
